@@ -35,7 +35,7 @@
     color: var(--text-hi);
     font-family: 'Nunito', ui-sans-serif, system-ui, sans-serif;
     min-height: 100vh;
-    height: 100%;
+    overflow-y: auto;
   }
 
   body{
@@ -47,8 +47,10 @@
 
   .console{
     width: min(880px, 100%);
+    height: min(720px, calc(100vh - 24px));
     display: grid;
     grid-template-columns: 92px minmax(0,1fr) 92px;
+    grid-template-rows: minmax(0, 1fr);
     gap: clamp(8px, 1.6vw, 18px);
     align-items: stretch;
   }
@@ -74,23 +76,44 @@
     width: 30px; height: 30px; border-radius: 50%;
     background: radial-gradient(circle at 35% 30%, #2c3540, #10151c 70%);
     box-shadow: 0 3px 0 rgba(0,0,0,0.35), inset 0 2px 3px rgba(255,255,255,0.08);
+    border: none; padding: 0; cursor: pointer;
+    transition: transform 0.1s;
   }
+  .rail-stick:active{ transform: scale(0.92); }
   .rail-dpad{
     width: 46px; height: 46px; position: relative; margin-top: 4px;
   }
   .rail-dpad::before, .rail-dpad::after{
-    content: ""; position: absolute; background: #163140; border-radius: 4px;
+    content: ""; position: absolute; background: #163140; border-radius: 4px; pointer-events: none;
   }
   .rail-dpad::before{ width: 14px; height: 44px; left: 16px; top: 1px; }
   .rail-dpad::after{ width: 44px; height: 14px; left: 1px; top: 16px; }
+
+  .dpad-btn{
+    position: absolute;
+    border: none; background: transparent; padding: 0; margin: 0;
+    cursor: pointer; color: transparent;
+  }
+  .dpad-btn:active{ filter: brightness(1.6); }
+  .dpad-btn.up{ left: 16px; top: 1px; width: 14px; height: 15px; }
+  .dpad-btn.down{ left: 16px; bottom: 1px; width: 14px; height: 15px; }
+  .dpad-btn.left{ left: 1px; top: 16px; width: 15px; height: 14px; }
+  .dpad-btn.right{ right: 1px; top: 16px; width: 15px; height: 14px; }
 
   .rail-buttons{
     display: grid; grid-template-columns: repeat(2, 22px); grid-template-rows: repeat(2, 22px);
     gap: 8px; margin-top: 6px;
   }
-  .rail-buttons span{
-    border-radius: 50%; background: #163140;
+  .rail-buttons button{
+    border-radius: 50%; background: #163140; border: none; padding: 0;
     box-shadow: 0 2px 0 rgba(0,0,0,0.3), inset 0 1px 2px rgba(255,255,255,0.08);
+    cursor: pointer; transition: background 0.15s, transform 0.1s;
+  }
+  .rail-buttons button:hover{ background: #1d3f52; }
+  .rail-buttons button:active{ transform: translateY(1px); }
+  .rail-buttons button.active-mode{ background: var(--shell-blue-3); box-shadow: 0 0 8px 2px rgba(143,216,242,0.5), inset 0 1px 2px rgba(255,255,255,0.15); }
+  .dpad-btn:focus-visible, .rail-buttons button:focus-visible, .rail-stick:focus-visible{
+    outline: 2px solid var(--focus); outline-offset: 2px;
   }
 
   .rail-cap{
@@ -118,6 +141,7 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
+    min-height: 0;
   }
 
   .bezel{
@@ -128,6 +152,7 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
+    height: 100%;
   }
 
   .topbar{
@@ -198,7 +223,7 @@
       var(--screen-bg);
     scrollbar-width: thin;
     scrollbar-color: var(--shell-blue-3) transparent;
-    min-height: 220px;
+    min-height: 0;
   }
   .messages::-webkit-scrollbar{ width: 8px; }
   .messages::-webkit-scrollbar-thumb{ background: var(--shell-blue-3); border-radius: 8px; }
@@ -318,6 +343,7 @@
     align-items: center; justify-content: center;
     z-index: 20;
     padding: 20px;
+    overflow-y: auto;
   }
   .settings-overlay.open{ display: flex; }
 
@@ -376,10 +402,15 @@
 </style>
 
 <div class="console">
-  <div class="rail left" aria-hidden="true">
-    <div class="rail-cap"></div>
-    <div class="rail-stick"></div>
-    <div class="rail-dpad"></div>
+  <div class="rail left">
+    <div class="rail-cap" aria-hidden="true"></div>
+    <button class="rail-stick" id="stickSettingsBtn" title="Settings" aria-label="Open settings"></button>
+    <div class="rail-dpad">
+      <button class="dpad-btn up" id="dpadUp" title="Scroll up" aria-label="Scroll messages up">&#9650;</button>
+      <button class="dpad-btn down" id="dpadDown" title="Scroll down" aria-label="Scroll messages down">&#9660;</button>
+      <button class="dpad-btn left" id="dpadTop" title="Jump to oldest" aria-label="Jump to oldest message">&#9664;</button>
+      <button class="dpad-btn right" id="dpadBottom" title="Jump to newest" aria-label="Jump to newest message">&#9654;</button>
+    </div>
   </div>
 
   <div class="screen-unit">
@@ -410,11 +441,14 @@
     </div>
   </div>
 
-  <div class="rail right" aria-hidden="true">
+  <div class="rail right">
     <div class="rail-buttons">
-      <span></span><span></span><span></span><span></span>
+      <button id="modeBtnClaude" title="Talk to Claude only" aria-label="Set mode to Claude only"></button>
+      <button id="modeBtnGpt" title="Talk to GPT only" aria-label="Set mode to GPT only"></button>
+      <button id="modeBtnBoth" title="Talk to both" aria-label="Set mode to both"></button>
+      <button id="modeBtnNewSession" title="Start new conversation" aria-label="Start new conversation"></button>
     </div>
-    <div class="rail-led" id="railLed"></div>
+    <div class="rail-led" id="railLed" aria-hidden="true"></div>
   </div>
 </div>
 
@@ -477,6 +511,15 @@
   var closeSettingsBtn = document.getElementById('closeSettingsBtn');
   var sessionIdDisplay = document.getElementById('sessionIdDisplay');
   var newSessionBtn = document.getElementById('newSessionBtn');
+  var dpadUp = document.getElementById('dpadUp');
+  var dpadDown = document.getElementById('dpadDown');
+  var dpadTop = document.getElementById('dpadTop');
+  var dpadBottom = document.getElementById('dpadBottom');
+  var stickSettingsBtn = document.getElementById('stickSettingsBtn');
+  var modeBtnClaude = document.getElementById('modeBtnClaude');
+  var modeBtnGpt = document.getElementById('modeBtnGpt');
+  var modeBtnBoth = document.getElementById('modeBtnBoth');
+  var modeBtnNewSession = document.getElementById('modeBtnNewSession');
 
   sessionTag.textContent = 'SESSION ' + sessionId.slice(0, 4).toUpperCase();
   sessionIdDisplay.textContent = sessionId;
@@ -568,6 +611,33 @@
     return 'BOTH';
   }
 
+  function setActiveModeButton(mode){
+    modeBtnClaude.classList.toggle('active-mode', mode === 'CLAUDE');
+    modeBtnGpt.classList.toggle('active-mode', mode === 'GPT');
+    modeBtnBoth.classList.toggle('active-mode', mode === 'BOTH');
+  }
+
+  function forcePrefix(prefix){
+    var text = textInput.value.replace(/^@(claude|gpt)\s*/i, '').trim();
+    textInput.value = prefix ? prefix + ' ' + text : text;
+    textInput.focus();
+    autoGrow();
+    modePill.textContent = detectMode(textInput.value || prefix || '');
+    setActiveModeButton(modePill.textContent);
+  }
+
+  function startNewSession(){
+    if(!confirm('Start a brand new conversation? This clears the chat shown here (your history stays saved in Supabase either way).')) return;
+    sessionId = uuid();
+    safeSet(STORAGE_KEYS.session, sessionId);
+    sessionTag.textContent = 'SESSION ' + sessionId.slice(0, 4).toUpperCase();
+    sessionIdDisplay.textContent = sessionId;
+    history = [];
+    saveCache(history);
+    renderAll();
+    settingsOverlay.classList.remove('open');
+  }
+
   function splitReply(output){
     // Format Reply nodes emit things like "**Claude:**\ntext" or "**Claude:**\ntext\n\n**GPT:**\ntext"
     var parts = [];
@@ -593,6 +663,7 @@
     }
 
     modePill.textContent = detectMode(text);
+    setActiveModeButton(modePill.textContent);
     pushMessage('Jasmine', text);
     textInput.value = '';
     autoGrow();
@@ -650,17 +721,24 @@
     safeSet(STORAGE_KEYS.webhook, webhookUrl);
     settingsOverlay.classList.remove('open');
   });
-  newSessionBtn.addEventListener('click', function(){
-    if(!confirm('Start a brand new conversation? This clears the chat shown here (your history stays saved in Supabase either way).')) return;
-    sessionId = uuid();
-    safeSet(STORAGE_KEYS.session, sessionId);
-    sessionTag.textContent = 'SESSION ' + sessionId.slice(0, 4).toUpperCase();
-    sessionIdDisplay.textContent = sessionId;
-    history = [];
-    saveCache(history);
-    renderAll();
-    settingsOverlay.classList.remove('open');
+  newSessionBtn.addEventListener('click', startNewSession);
+
+  dpadUp.addEventListener('click', function(){ messagesEl.scrollBy({ top: -140, behavior: 'smooth' }); });
+  dpadDown.addEventListener('click', function(){ messagesEl.scrollBy({ top: 140, behavior: 'smooth' }); });
+  dpadTop.addEventListener('click', function(){ messagesEl.scrollTo({ top: 0, behavior: 'smooth' }); });
+  dpadBottom.addEventListener('click', function(){ scrollToBottom(); });
+
+  stickSettingsBtn.addEventListener('click', function(){
+    webhookInput.value = webhookUrl;
+    settingsOverlay.classList.add('open');
   });
+
+  modeBtnClaude.addEventListener('click', function(){ forcePrefix('@claude'); });
+  modeBtnGpt.addEventListener('click', function(){ forcePrefix('@gpt'); });
+  modeBtnBoth.addEventListener('click', function(){ forcePrefix(''); });
+  modeBtnNewSession.addEventListener('click', startNewSession);
+
+  setActiveModeButton(modePill.textContent);
 
   renderAll();
 })();
