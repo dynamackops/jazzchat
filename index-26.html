@@ -1,0 +1,667 @@
+<title>JazzChat</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@400;600;700;800&family=Press+Start+2P&display=swap">
+<style>
+  :root{
+    --shell-blue-1: #8fd8f2;
+    --shell-blue-2: #5fb9e0;
+    --shell-blue-3: #3f97c2;
+    --shell-edge: #2c7aa3;
+    --bezel: #1b2027;
+    --screen-bg: #10151b;
+    --screen-bg-2: #151c24;
+    --grid-line: rgba(143, 216, 242, 0.06);
+    --text-hi: #eef6fb;
+    --text-lo: #9db2c2;
+    --jasmine-bubble: #eef6fb;
+    --jasmine-text: #16232c;
+    --claude-accent: #ff8f5e;
+    --claude-bubble: #2a1e1a;
+    --gpt-accent: #4bd3a0;
+    --gpt-bubble: #172622;
+    --system-accent: #f2c94c;
+    --danger: #ff6b6b;
+    --led-idle: #6fe0ff;
+    --led-busy: #ffb454;
+    --focus: #bfe9ff;
+    font-size: 16px;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html, body{
+    margin: 0;
+    padding: 0;
+    background: radial-gradient(circle at 50% 0%, #234258 0%, #101823 55%, #0a0f16 100%);
+    color: var(--text-hi);
+    font-family: 'Nunito', ui-sans-serif, system-ui, sans-serif;
+    min-height: 100vh;
+    height: 100%;
+  }
+
+  body{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(10px, 3vw, 32px);
+  }
+
+  .console{
+    width: min(880px, 100%);
+    display: grid;
+    grid-template-columns: 92px minmax(0,1fr) 92px;
+    gap: clamp(8px, 1.6vw, 18px);
+    align-items: stretch;
+  }
+
+  .rail{
+    background: linear-gradient(160deg, var(--shell-blue-1), var(--shell-blue-2) 55%, var(--shell-blue-3));
+    border-radius: 28px;
+    position: relative;
+    box-shadow:
+      inset 0 2px 0 rgba(255,255,255,0.55),
+      inset 0 -10px 22px rgba(20,70,95,0.35),
+      0 14px 30px rgba(6, 20, 30, 0.45);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 22px 0;
+  }
+
+  .rail.left{ justify-content: flex-start; gap: 18px; }
+  .rail.right{ justify-content: space-between; }
+
+  .rail-stick{
+    width: 30px; height: 30px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #2c3540, #10151c 70%);
+    box-shadow: 0 3px 0 rgba(0,0,0,0.35), inset 0 2px 3px rgba(255,255,255,0.08);
+  }
+  .rail-dpad{
+    width: 46px; height: 46px; position: relative; margin-top: 4px;
+  }
+  .rail-dpad::before, .rail-dpad::after{
+    content: ""; position: absolute; background: #163140; border-radius: 4px;
+  }
+  .rail-dpad::before{ width: 14px; height: 44px; left: 16px; top: 1px; }
+  .rail-dpad::after{ width: 44px; height: 14px; left: 1px; top: 16px; }
+
+  .rail-buttons{
+    display: grid; grid-template-columns: repeat(2, 22px); grid-template-rows: repeat(2, 22px);
+    gap: 8px; margin-top: 6px;
+  }
+  .rail-buttons span{
+    border-radius: 50%; background: #163140;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.3), inset 0 1px 2px rgba(255,255,255,0.08);
+  }
+
+  .rail-cap{
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(160deg, #cdeefb, #7fcdec);
+    box-shadow: 0 2px 0 rgba(0,0,0,0.2);
+  }
+
+  .rail-led{
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--led-idle);
+    box-shadow: 0 0 10px 2px var(--led-idle);
+    transition: background 0.25s, box-shadow 0.25s;
+  }
+  .rail-led.busy{ background: var(--led-busy); box-shadow: 0 0 12px 3px var(--led-busy); }
+
+  .screen-unit{
+    background: linear-gradient(180deg, var(--shell-blue-1), var(--shell-blue-2) 60%, var(--shell-blue-3));
+    border-radius: 26px;
+    padding: clamp(10px, 1.6vw, 16px);
+    box-shadow:
+      inset 0 2px 0 rgba(255,255,255,0.5),
+      inset 0 -12px 26px rgba(20,70,95,0.3),
+      0 18px 40px rgba(4, 14, 22, 0.5);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .bezel{
+    background: var(--bezel);
+    border-radius: 16px;
+    padding: 10px 10px 0;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .topbar{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 6px 10px;
+    border-bottom: 1px solid rgba(143,216,242,0.12);
+  }
+
+  .brand{
+    font-family: 'Baloo 2', 'Nunito', sans-serif;
+    font-weight: 800;
+    font-size: 1.05rem;
+    letter-spacing: 0.02em;
+    color: var(--text-hi);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .brand .dot{
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--led-idle);
+    box-shadow: 0 0 8px 2px var(--led-idle);
+  }
+  .brand .dot.busy{ background: var(--led-busy); box-shadow: 0 0 10px 3px var(--led-busy); animation: pulse 1s infinite ease-in-out; }
+  @keyframes pulse{ 0%,100%{ opacity: 1; } 50%{ opacity: 0.35; } }
+
+  .mode-pill{
+    font-family: 'Press Start 2P', monospace;
+    font-size: 0.5rem;
+    letter-spacing: 0.03em;
+    color: var(--screen-bg);
+    background: var(--focus);
+    border-radius: 999px;
+    padding: 5px 8px;
+    white-space: nowrap;
+  }
+
+  .topbar-spacer{ flex: 1; }
+
+  .icon-btn{
+    background: rgba(143,216,242,0.1);
+    border: 1px solid rgba(143,216,242,0.2);
+    color: var(--text-hi);
+    width: 32px; height: 32px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem;
+    transition: background 0.15s, transform 0.1s;
+  }
+  .icon-btn:hover{ background: rgba(143,216,242,0.2); }
+  .icon-btn:active{ transform: scale(0.94); }
+  .icon-btn:focus-visible, .send-btn:focus-visible, .text-input:focus-visible, .settings input:focus-visible, .settings button:focus-visible{
+    outline: 2px solid var(--focus); outline-offset: 2px;
+  }
+
+  .messages{
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 6px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background:
+      linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0/100% 28px,
+      var(--screen-bg);
+    scrollbar-width: thin;
+    scrollbar-color: var(--shell-blue-3) transparent;
+    min-height: 220px;
+  }
+  .messages::-webkit-scrollbar{ width: 8px; }
+  .messages::-webkit-scrollbar-thumb{ background: var(--shell-blue-3); border-radius: 8px; }
+
+  .empty-state{
+    margin: auto;
+    text-align: center;
+    color: var(--text-lo);
+    font-size: 0.9rem;
+    max-width: 30ch;
+    line-height: 1.5;
+  }
+  .empty-state strong{ color: var(--text-hi); }
+
+  .row{ display: flex; gap: 8px; max-width: 82%; }
+  .row.me{ align-self: flex-end; flex-direction: row-reverse; }
+  .row.claude, .row.gpt, .row.system{ align-self: flex-start; }
+
+  .avatar{
+    flex-shrink: 0;
+    width: 28px; height: 28px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Baloo 2', sans-serif; font-weight: 700; font-size: 0.8rem;
+    color: var(--screen-bg);
+    margin-top: 2px;
+  }
+  .row.claude .avatar{ background: var(--claude-accent); }
+  .row.gpt .avatar{ background: var(--gpt-accent); }
+  .row.me .avatar{ background: var(--jasmine-bubble); }
+  .row.system .avatar{ background: var(--system-accent); }
+
+  .bubble{
+    padding: 9px 13px;
+    border-radius: 14px;
+    font-size: 0.92rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .row.me .bubble{ background: var(--jasmine-bubble); color: var(--jasmine-text); border-bottom-right-radius: 4px; }
+  .row.claude .bubble{ background: var(--claude-bubble); color: var(--text-hi); border: 1px solid rgba(255,143,94,0.35); border-bottom-left-radius: 4px; }
+  .row.gpt .bubble{ background: var(--gpt-bubble); color: var(--text-hi); border: 1px solid rgba(75,211,160,0.35); border-bottom-left-radius: 4px; }
+  .row.system .bubble{ background: rgba(242,201,76,0.1); color: var(--text-lo); border: 1px dashed rgba(242,201,76,0.4); font-size: 0.82rem; }
+
+  .speaker-label{
+    font-family: 'Baloo 2', sans-serif;
+    font-weight: 700;
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    margin-bottom: 3px;
+    display: block;
+  }
+  .row.claude .speaker-label{ color: var(--claude-accent); }
+  .row.gpt .speaker-label{ color: var(--gpt-accent); }
+
+  .typing{
+    display: inline-flex; gap: 4px; padding: 2px 4px;
+  }
+  .typing span{
+    width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+    animation: bob 1s infinite ease-in-out;
+  }
+  .typing span:nth-child(2){ animation-delay: 0.15s; }
+  .typing span:nth-child(3){ animation-delay: 0.3s; }
+  @keyframes bob{ 0%,60%,100%{ transform: translateY(0); opacity: 0.5; } 30%{ transform: translateY(-4px); opacity: 1; } }
+
+  .dock{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 6px 14px;
+  }
+
+  .text-input{
+    flex: 1;
+    background: var(--screen-bg-2);
+    border: 1px solid rgba(143,216,242,0.18);
+    color: var(--text-hi);
+    border-radius: 999px;
+    padding: 11px 16px;
+    font-family: 'Nunito', sans-serif;
+    font-size: 0.92rem;
+    resize: none;
+    max-height: 90px;
+  }
+  .text-input::placeholder{ color: var(--text-lo); }
+
+  .send-btn{
+    flex-shrink: 0;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #ffe7d8, var(--claude-accent) 70%);
+    border: none;
+    color: #2a1207;
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.25);
+    transition: transform 0.1s;
+  }
+  .send-btn:active{ transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,0.25); }
+  .send-btn:disabled{ opacity: 0.5; cursor: default; }
+
+  .hint-row{
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0 6px 8px;
+    font-size: 0.68rem;
+    color: var(--text-lo);
+    font-family: 'Press Start 2P', monospace;
+    letter-spacing: 0.02em;
+  }
+
+  .settings-overlay{
+    position: fixed; inset: 0;
+    background: rgba(6,10,16,0.65);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 20;
+    padding: 20px;
+  }
+  .settings-overlay.open{ display: flex; }
+
+  .settings{
+    background: var(--screen-bg-2);
+    border: 1px solid rgba(143,216,242,0.25);
+    border-radius: 18px;
+    padding: 22px;
+    width: min(380px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  }
+  .settings h2{
+    font-family: 'Baloo 2', sans-serif;
+    margin: 0;
+    font-size: 1.1rem;
+  }
+  .settings label{
+    font-size: 0.78rem;
+    color: var(--text-lo);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .settings input{
+    background: var(--screen-bg);
+    border: 1px solid rgba(143,216,242,0.2);
+    color: var(--text-hi);
+    border-radius: 10px;
+    padding: 9px 11px;
+    font-size: 0.85rem;
+    font-family: 'Nunito', monospace;
+  }
+  .settings .row-btns{ display: flex; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
+  .settings button{
+    border: none;
+    border-radius: 10px;
+    padding: 9px 14px;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 700;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+  .btn-primary{ background: var(--shell-blue-1); color: #0d2331; }
+  .btn-ghost{ background: transparent; color: var(--text-lo); border: 1px solid rgba(143,216,242,0.25) !important; }
+  .btn-danger{ background: rgba(255,107,107,0.15); color: var(--danger); border: 1px solid rgba(255,107,107,0.4) !important; }
+  .settings small{ color: var(--text-lo); font-size: 0.72rem; line-height: 1.5; }
+
+  @media (max-width: 700px){
+    .console{ grid-template-columns: minmax(0,1fr); }
+    .rail{ display: none; }
+    body{ padding: 8px; }
+  }
+</style>
+
+<div class="console">
+  <div class="rail left" aria-hidden="true">
+    <div class="rail-cap"></div>
+    <div class="rail-stick"></div>
+    <div class="rail-dpad"></div>
+  </div>
+
+  <div class="screen-unit">
+    <div class="bezel">
+      <div class="topbar">
+        <span class="brand"><span class="dot" id="ledDot"></span>JazzChat</span>
+        <span class="mode-pill" id="modePill">BOTH</span>
+        <span class="topbar-spacer"></span>
+        <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Open settings">&#9881;</button>
+      </div>
+
+      <div class="messages" id="messages">
+        <div class="empty-state" id="emptyState">
+          <strong>Say hi to start.</strong><br>
+          Type normally for both Claude and GPT, or start with <strong>@claude</strong> / <strong>@gpt</strong> to pick one. They both remember what Cosmo knows about you.
+        </div>
+      </div>
+
+      <div class="hint-row">
+        <span id="sessionTag">SESSION ----</span>
+        <span>@CLAUDE&nbsp;&nbsp;@GPT</span>
+      </div>
+
+      <div class="dock">
+        <textarea id="textInput" class="text-input" rows="1" placeholder="Message JazzChat..." aria-label="Message"></textarea>
+        <button class="send-btn" id="sendBtn" aria-label="Send message">&#10148;</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="rail right" aria-hidden="true">
+    <div class="rail-buttons">
+      <span></span><span></span><span></span><span></span>
+    </div>
+    <div class="rail-led" id="railLed"></div>
+  </div>
+</div>
+
+<div class="settings-overlay" id="settingsOverlay">
+  <div class="settings">
+    <h2>Console settings</h2>
+    <label>
+      n8n chat webhook URL
+      <input type="text" id="webhookInput" placeholder="https://your-instance.app.n8n.cloud/webhook/.../chat">
+    </label>
+    <small>This is the production webhook URL for the JazzChat Chat Trigger node in n8n. Find it by opening that node and copying the "Production URL".</small>
+    <div class="row-btns">
+      <button class="btn-primary" id="saveSettingsBtn">Save</button>
+      <button class="btn-ghost" id="closeSettingsBtn">Close</button>
+    </div>
+    <hr style="border: none; border-top: 1px solid rgba(143,216,242,0.15); width: 100%;">
+    <small>Session: <span id="sessionIdDisplay" style="font-family: monospace;"></span></small>
+    <div class="row-btns">
+      <button class="btn-danger" id="newSessionBtn">Start new conversation</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var STORAGE_KEYS = {
+    webhook: 'jazzchat_webhook_url',
+    session: 'jazzchat_session_id',
+    cache: 'jazzchat_message_cache_'
+  };
+  var DEFAULT_WEBHOOK = 'https://jagama.app.n8n.cloud/webhook/28c228b2-d47e-4cc6-bea0-5c65c8741e87/chat';
+
+  function safeGet(key){ try{ return localStorage.getItem(key); }catch(e){ return null; } }
+  function safeSet(key, val){ try{ localStorage.setItem(key, val); }catch(e){} }
+
+  function uuid(){
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c){
+      var r = Math.random()*16|0, v = c === 'x' ? r : (r&0x3|0x8);
+      return v.toString(16);
+    });
+  }
+
+  var sessionId = safeGet(STORAGE_KEYS.session);
+  if(!sessionId){ sessionId = uuid(); safeSet(STORAGE_KEYS.session, sessionId); }
+
+  var webhookUrl = safeGet(STORAGE_KEYS.webhook) || DEFAULT_WEBHOOK;
+
+  var messagesEl = document.getElementById('messages');
+  var emptyState = document.getElementById('emptyState');
+  var textInput = document.getElementById('textInput');
+  var sendBtn = document.getElementById('sendBtn');
+  var ledDot = document.getElementById('ledDot');
+  var railLed = document.getElementById('railLed');
+  var modePill = document.getElementById('modePill');
+  var sessionTag = document.getElementById('sessionTag');
+  var settingsBtn = document.getElementById('settingsBtn');
+  var settingsOverlay = document.getElementById('settingsOverlay');
+  var webhookInput = document.getElementById('webhookInput');
+  var saveSettingsBtn = document.getElementById('saveSettingsBtn');
+  var closeSettingsBtn = document.getElementById('closeSettingsBtn');
+  var sessionIdDisplay = document.getElementById('sessionIdDisplay');
+  var newSessionBtn = document.getElementById('newSessionBtn');
+
+  sessionTag.textContent = 'SESSION ' + sessionId.slice(0, 4).toUpperCase();
+  sessionIdDisplay.textContent = sessionId;
+  webhookInput.value = webhookUrl;
+
+  function cacheKey(){ return STORAGE_KEYS.cache + sessionId; }
+
+  function loadCache(){
+    var raw = safeGet(cacheKey());
+    if(!raw) return [];
+    try{ return JSON.parse(raw); }catch(e){ return []; }
+  }
+  function saveCache(list){
+    safeSet(cacheKey(), JSON.stringify(list.slice(-100)));
+  }
+
+  var history = loadCache();
+
+  function renderAll(){
+    messagesEl.querySelectorAll('.row').forEach(function(n){ n.remove(); });
+    emptyState.style.display = history.length ? 'none' : 'block';
+    history.forEach(appendBubble);
+    scrollToBottom();
+  }
+
+  function speakerClass(speaker){
+    if(speaker === 'Jasmine') return 'me';
+    if(speaker === 'Claude') return 'claude';
+    if(speaker === 'GPT') return 'gpt';
+    return 'system';
+  }
+  function speakerInitial(speaker){
+    if(speaker === 'Jasmine') return 'J';
+    if(speaker === 'Claude') return 'C';
+    if(speaker === 'GPT') return 'G';
+    return '!';
+  }
+
+  function appendBubble(msg){
+    var cls = speakerClass(msg.speaker);
+    var row = document.createElement('div');
+    row.className = 'row ' + cls;
+
+    var avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = speakerInitial(msg.speaker);
+
+    var bubble = document.createElement('div');
+    bubble.className = 'bubble';
+
+    if(cls === 'claude' || cls === 'gpt'){
+      var label = document.createElement('span');
+      label.className = 'speaker-label';
+      label.textContent = msg.speaker;
+      bubble.appendChild(label);
+    }
+    var textNode = document.createElement('span');
+    textNode.textContent = msg.text;
+    bubble.appendChild(textNode);
+
+    row.appendChild(avatar);
+    row.appendChild(bubble);
+    messagesEl.appendChild(row);
+    emptyState.style.display = 'none';
+  }
+
+  function pushMessage(speaker, text){
+    var msg = { speaker: speaker, text: text, t: Date.now() };
+    history.push(msg);
+    saveCache(history);
+    appendBubble(msg);
+    scrollToBottom();
+  }
+
+  function scrollToBottom(){
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function setBusy(isBusy){
+    ledDot.classList.toggle('busy', isBusy);
+    railLed.classList.toggle('busy', isBusy);
+    sendBtn.disabled = isBusy;
+  }
+
+  function detectMode(text){
+    var lower = text.toLowerCase().trim();
+    if(lower.indexOf('@claude') === 0) return 'CLAUDE';
+    if(lower.indexOf('@gpt') === 0) return 'GPT';
+    return 'BOTH';
+  }
+
+  function splitReply(output){
+    // Format Reply nodes emit things like "**Claude:**\ntext" or "**Claude:**\ntext\n\n**GPT:**\ntext"
+    var parts = [];
+    var regex = /\*\*(Claude|GPT):\*\*\s*([\s\S]*?)(?=(\*\*(Claude|GPT):\*\*)|$)/g;
+    var match;
+    var found = false;
+    while((match = regex.exec(output)) !== null){
+      found = true;
+      parts.push({ speaker: match[1], text: match[2].trim() });
+    }
+    if(!found){
+      parts.push({ speaker: 'System', text: output.trim() });
+    }
+    return parts;
+  }
+
+  function sendMessage(){
+    var text = textInput.value.trim();
+    if(!text) return;
+    if(!webhookUrl){
+      pushMessage('System', 'No webhook URL set yet. Open settings (gear icon) and paste the JazzChat chat trigger URL from n8n.');
+      return;
+    }
+
+    modePill.textContent = detectMode(text);
+    pushMessage('Jasmine', text);
+    textInput.value = '';
+    autoGrow();
+    setBusy(true);
+
+    fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatInput: text, sessionId: sessionId, action: 'sendMessage' })
+    })
+    .then(function(res){
+      if(!res.ok) throw new Error('Server responded with ' + res.status);
+      return res.json();
+    })
+    .then(function(data){
+      var output = data.output || data.text || data.reply || JSON.stringify(data);
+      splitReply(output).forEach(function(part){
+        pushMessage(part.speaker, part.text);
+      });
+    })
+    .catch(function(err){
+      pushMessage('System', 'Could not reach JazzChat: ' + err.message + '. Check the webhook URL in settings, or try again in a bit.');
+    })
+    .finally(function(){
+      setBusy(false);
+    });
+  }
+
+  function autoGrow(){
+    textInput.style.height = 'auto';
+    textInput.style.height = Math.min(textInput.scrollHeight, 90) + 'px';
+  }
+
+  textInput.addEventListener('input', autoGrow);
+  textInput.addEventListener('keydown', function(e){
+    if(e.key === 'Enter' && !e.shiftKey){
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+  sendBtn.addEventListener('click', sendMessage);
+
+  settingsBtn.addEventListener('click', function(){
+    webhookInput.value = webhookUrl;
+    settingsOverlay.classList.add('open');
+  });
+  closeSettingsBtn.addEventListener('click', function(){
+    settingsOverlay.classList.remove('open');
+  });
+  settingsOverlay.addEventListener('click', function(e){
+    if(e.target === settingsOverlay) settingsOverlay.classList.remove('open');
+  });
+  saveSettingsBtn.addEventListener('click', function(){
+    webhookUrl = webhookInput.value.trim();
+    safeSet(STORAGE_KEYS.webhook, webhookUrl);
+    settingsOverlay.classList.remove('open');
+  });
+  newSessionBtn.addEventListener('click', function(){
+    if(!confirm('Start a brand new conversation? This clears the chat shown here (your history stays saved in Supabase either way).')) return;
+    sessionId = uuid();
+    safeSet(STORAGE_KEYS.session, sessionId);
+    sessionTag.textContent = 'SESSION ' + sessionId.slice(0, 4).toUpperCase();
+    sessionIdDisplay.textContent = sessionId;
+    history = [];
+    saveCache(history);
+    renderAll();
+    settingsOverlay.classList.remove('open');
+  });
+
+  renderAll();
+})();
+</script>
