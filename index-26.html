@@ -405,6 +405,9 @@
     font-size: 0.85rem;
     font-family: 'Nunito', monospace;
   }
+  .secret-row{ display: flex; gap: 6px; }
+  .secret-row input{ flex: 1; }
+  .btn-reveal{ flex-shrink: 0; padding: 9px 11px !important; font-size: 0.9rem !important; }
   .settings .row-btns{ display: flex; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
   .settings button{
     border: none;
@@ -499,9 +502,20 @@
     <h2>Console settings</h2>
     <label>
       n8n chat webhook URL
-      <input type="text" id="webhookInput" placeholder="https://your-instance.app.n8n.cloud/webhook/.../chat">
+      <div class="secret-row">
+        <input type="password" id="webhookInput" placeholder="https://your-instance.app.n8n.cloud/webhook/.../chat">
+        <button type="button" class="btn-ghost btn-reveal" data-reveal-for="webhookInput" aria-label="Show webhook URL">&#128065;</button>
+      </div>
     </label>
     <small>This is the production webhook URL for the JazzChat Chat Trigger node in n8n. Find it by opening that node and copying the "Production URL".</small>
+    <label>
+      Access key
+      <div class="secret-row">
+        <input type="password" id="accessKeyInput" placeholder="Shared key from the n8n workflow">
+        <button type="button" class="btn-ghost btn-reveal" data-reveal-for="accessKeyInput" aria-label="Show access key">&#128065;</button>
+      </div>
+    </label>
+    <small>Required so random visitors can't run up your Claude/GPT bill. Ask Jasmine for the current key.</small>
     <div class="row-btns">
       <button class="btn-primary" id="saveSettingsBtn">Save</button>
       <button class="btn-ghost" id="closeSettingsBtn">Close</button>
@@ -518,6 +532,7 @@
 (function(){
   var STORAGE_KEYS = {
     webhook: 'jazzchat_webhook_url',
+    accessKey: 'jazzchat_access_key',
     session: 'jazzchat_session_id',
     cache: 'jazzchat_message_cache_'
   };
@@ -537,6 +552,7 @@
   if(!sessionId){ sessionId = uuid(); safeSet(STORAGE_KEYS.session, sessionId); }
 
   var webhookUrl = safeGet(STORAGE_KEYS.webhook) || DEFAULT_WEBHOOK;
+  var accessKey = safeGet(STORAGE_KEYS.accessKey) || '';
 
   var messagesEl = document.getElementById('messages');
   var emptyState = document.getElementById('emptyState');
@@ -549,6 +565,7 @@
   var settingsBtn = document.getElementById('settingsBtn');
   var settingsOverlay = document.getElementById('settingsOverlay');
   var webhookInput = document.getElementById('webhookInput');
+  var accessKeyInput = document.getElementById('accessKeyInput');
   var saveSettingsBtn = document.getElementById('saveSettingsBtn');
   var closeSettingsBtn = document.getElementById('closeSettingsBtn');
   var sessionIdDisplay = document.getElementById('sessionIdDisplay');
@@ -568,6 +585,7 @@
   sessionTag.textContent = 'SESSION ' + sessionId.slice(0, 4).toUpperCase();
   sessionIdDisplay.textContent = sessionId;
   webhookInput.value = webhookUrl;
+  accessKeyInput.value = accessKey;
 
   function cacheKey(){ return STORAGE_KEYS.cache + sessionId; }
 
@@ -717,6 +735,33 @@
     return parts;
   }
 
+  function showTyping(){
+    hideTyping();
+    var row = document.createElement('div');
+    row.className = 'row claude';
+    row.id = 'typingRow';
+    var avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = '…';
+    var bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    var typing = document.createElement('span');
+    typing.className = 'typing';
+    typing.innerHTML = '<span></span><span></span><span></span>';
+    bubble.appendChild(typing);
+    row.appendChild(avatar);
+    row.appendChild(bubble);
+    messagesEl.appendChild(row);
+    emptyState.style.display = 'none';
+    scrollToBottom();
+    updateScrollIndicator();
+  }
+
+  function hideTyping(){
+    var row = document.getElementById('typingRow');
+    if(row) row.remove();
+  }
+
   function sendMessage(){
     var text = textInput.value.trim();
     if(!text) return;
@@ -731,23 +776,26 @@
     textInput.value = '';
     autoGrow();
     setBusy(true);
+    showTyping();
 
     fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chatInput: text, sessionId: sessionId, action: 'sendMessage' })
+      body: JSON.stringify({ chatInput: text, sessionId: sessionId, action: 'sendMessage', accessKey: accessKey })
     })
     .then(function(res){
       if(!res.ok) throw new Error('Server responded with ' + res.status);
       return res.json();
     })
     .then(function(data){
+      hideTyping();
       var output = data.output || data.text || data.reply || JSON.stringify(data);
       splitReply(output).forEach(function(part){
         pushMessage(part.speaker, part.text);
       });
     })
     .catch(function(err){
+      hideTyping();
       pushMessage('System', 'Could not reach JazzChat: ' + err.message + '. Check the webhook URL in settings, or try again in a bit.');
     })
     .finally(function(){
@@ -771,6 +819,7 @@
 
   settingsBtn.addEventListener('click', function(){
     webhookInput.value = webhookUrl;
+    accessKeyInput.value = accessKey;
     settingsOverlay.classList.add('open');
   });
   closeSettingsBtn.addEventListener('click', function(){
@@ -781,8 +830,18 @@
   });
   saveSettingsBtn.addEventListener('click', function(){
     webhookUrl = webhookInput.value.trim();
+    accessKey = accessKeyInput.value.trim();
     safeSet(STORAGE_KEYS.webhook, webhookUrl);
+    safeSet(STORAGE_KEYS.accessKey, accessKey);
     settingsOverlay.classList.remove('open');
+  });
+  document.querySelectorAll('.btn-reveal').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var target = document.getElementById(btn.getAttribute('data-reveal-for'));
+      var showing = target.type === 'text';
+      target.type = showing ? 'password' : 'text';
+      btn.textContent = showing ? '\u{1F441}' : '\u{1F648}';
+    });
   });
   newSessionBtn.addEventListener('click', startNewSession);
 
