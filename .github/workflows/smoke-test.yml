@@ -3,13 +3,13 @@ name: Smoke test
 on:
   pull_request:
     paths:
-      - 'index-26.html'
+      - 'index.html'
       - 'tests/**'
       - 'package.json'
   push:
     branches: [main]
     paths:
-      - 'index-26.html'
+      - 'index.html'
       - 'tests/**'
       - 'package.json'
 
