@@ -323,6 +323,50 @@
     padding: 10px 6px 14px;
   }
 
+  .attach-preview{
+    display: none;
+    padding: 0 6px;
+    margin-top: 4px;
+  }
+  .attach-preview.visible{ display: block; }
+  .attach-chip{
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(143,216,242,0.12);
+    border: 1px solid rgba(143,216,242,0.25);
+    border-radius: 999px;
+    padding: 4px 8px 4px 10px;
+    font-size: 0.78rem;
+    color: var(--text-hi);
+    max-width: 100%;
+  }
+  .attach-name{
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 220px;
+  }
+  .attach-remove{
+    background: transparent;
+    border: none;
+    color: var(--text-lo);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 2px;
+  }
+  .attach-remove:hover{ color: var(--danger); }
+
+  .msg-attach-tag{
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 5px;
+    font-size: 0.72rem;
+    opacity: 0.75;
+  }
+
   .text-input{
     flex: 1;
     background: var(--screen-bg-2);
@@ -479,7 +523,17 @@
         <span>@CLAUDE&nbsp;&nbsp;@GPT</span>
       </div>
 
+      <div class="attach-preview" id="attachPreview">
+        <span class="attach-chip">
+          <span class="attach-icon" id="attachIcon">&#128206;</span>
+          <span class="attach-name" id="attachName"></span>
+          <button type="button" class="attach-remove" id="attachRemoveBtn" aria-label="Remove attachment">&times;</button>
+        </span>
+      </div>
+
       <div class="dock">
+        <input type="file" id="fileInput" accept="image/*,application/pdf" hidden>
+        <button class="icon-btn" id="attachBtn" title="Attach image or PDF" aria-label="Attach image or PDF">&#128206;</button>
         <textarea id="textInput" class="text-input" rows="1" placeholder="Message JazzChat..." aria-label="Message"></textarea>
         <button class="send-btn" id="sendBtn" aria-label="Send message">&#10148;</button>
       </div>
@@ -581,6 +635,14 @@
   var modeBtnNewSession = document.getElementById('modeBtnNewSession');
   var scrollTrack = document.getElementById('scrollTrack');
   var scrollThumb = document.getElementById('scrollThumb');
+  var fileInput = document.getElementById('fileInput');
+  var attachBtn = document.getElementById('attachBtn');
+  var attachPreview = document.getElementById('attachPreview');
+  var attachName = document.getElementById('attachName');
+  var attachRemoveBtn = document.getElementById('attachRemoveBtn');
+
+  var MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+  var pendingAttachment = null;
 
   sessionTag.textContent = 'SESSION ' + sessionId.slice(0, 4).toUpperCase();
   sessionIdDisplay.textContent = sessionId;
@@ -643,14 +705,22 @@
     textNode.textContent = msg.text;
     bubble.appendChild(textNode);
 
+    if(msg.attachmentName){
+      var tag = document.createElement('span');
+      tag.className = 'msg-attach-tag';
+      tag.textContent = '📎 ' + msg.attachmentName;
+      bubble.appendChild(document.createElement('br'));
+      bubble.appendChild(tag);
+    }
+
     row.appendChild(avatar);
     row.appendChild(bubble);
     messagesEl.appendChild(row);
     emptyState.style.display = 'none';
   }
 
-  function pushMessage(speaker, text){
-    var msg = { speaker: speaker, text: text, t: Date.now() };
+  function pushMessage(speaker, text, attachmentName){
+    var msg = { speaker: speaker, text: text, t: Date.now(), attachmentName: attachmentName || null };
     history.push(msg);
     saveCache(history);
     appendBubble(msg);
@@ -762,9 +832,17 @@
     if(row) row.remove();
   }
 
+  function clearAttachment(){
+    pendingAttachment = null;
+    fileInput.value = '';
+    attachPreview.classList.remove('visible');
+    attachName.textContent = '';
+  }
+
   function sendMessage(){
     var text = textInput.value.trim();
-    if(!text) return;
+    var attachment = pendingAttachment;
+    if(!text && !attachment) return;
     if(!webhookUrl){
       pushMessage('System', 'No webhook URL set yet. Open settings (gear icon) and paste the JazzChat chat trigger URL from n8n.');
       return;
@@ -772,16 +850,24 @@
 
     modePill.textContent = detectMode(text);
     setActiveModeButton(modePill.textContent);
-    pushMessage('Jasmine', text);
+    pushMessage('Jasmine', text, attachment ? attachment.name : null);
     textInput.value = '';
     autoGrow();
+    clearAttachment();
     setBusy(true);
     showTyping();
+
+    var payload = { chatInput: text, sessionId: sessionId, action: 'sendMessage', accessKey: accessKey };
+    if(attachment){
+      payload.file_base64 = attachment.base64;
+      payload.file_name = attachment.name;
+      payload.file_mime_type = attachment.mimeType;
+    }
 
     fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chatInput: text, sessionId: sessionId, action: 'sendMessage', accessKey: accessKey })
+      body: JSON.stringify(payload)
     })
     .then(function(res){
       if(!res.ok) throw new Error('Server responded with ' + res.status);
@@ -816,6 +902,38 @@
     }
   });
   sendBtn.addEventListener('click', sendMessage);
+
+  attachBtn.addEventListener('click', function(){ fileInput.click(); });
+  attachRemoveBtn.addEventListener('click', clearAttachment);
+  fileInput.addEventListener('change', function(){
+    var file = fileInput.files && fileInput.files[0];
+    if(!file) return;
+    var isImage = file.type.indexOf('image/') === 0;
+    var isPdf = file.type === 'application/pdf';
+    if(!isImage && !isPdf){
+      pushMessage('System', 'JazzChat can only attach images or PDFs right now (' + (file.type || 'unknown type') + ' not supported).');
+      fileInput.value = '';
+      return;
+    }
+    if(file.size > MAX_ATTACHMENT_BYTES){
+      pushMessage('System', 'That file is too big (' + Math.round(file.size / 1024 / 1024) + 'MB). Please attach something under 8MB.');
+      fileInput.value = '';
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function(){
+      var dataUrl = String(reader.result || '');
+      var base64 = dataUrl.split(',').pop();
+      pendingAttachment = { name: file.name, mimeType: file.type, base64: base64 };
+      attachName.textContent = file.name;
+      attachPreview.classList.add('visible');
+      textInput.focus();
+    };
+    reader.onerror = function(){
+      pushMessage('System', 'Could not read that file. Try again or pick a different one.');
+    };
+    reader.readAsDataURL(file);
+  });
 
   settingsBtn.addEventListener('click', function(){
     webhookInput.value = webhookUrl;
