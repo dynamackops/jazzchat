@@ -211,10 +211,17 @@
     outline: 2px solid var(--focus); outline-offset: 2px;
   }
 
+  .messages-wrap{
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+
   .messages{
     flex: 1;
     overflow-y: auto;
-    padding: 16px 6px 10px;
+    padding: 16px 16px 10px 6px;
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -222,11 +229,30 @@
       linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0/100% 28px,
       var(--screen-bg);
     scrollbar-width: thin;
-    scrollbar-color: var(--shell-blue-3) transparent;
+    scrollbar-color: var(--shell-blue-2) rgba(143,216,242,0.08);
     min-height: 0;
   }
-  .messages::-webkit-scrollbar{ width: 8px; }
-  .messages::-webkit-scrollbar-thumb{ background: var(--shell-blue-3); border-radius: 8px; }
+  .messages::-webkit-scrollbar{ width: 10px; }
+  .messages::-webkit-scrollbar-track{ background: rgba(143,216,242,0.08); border-radius: 8px; }
+  .messages::-webkit-scrollbar-thumb{ background: var(--shell-blue-2); border-radius: 8px; border: 2px solid var(--screen-bg); }
+
+  .scroll-track{
+    position: absolute;
+    top: 6px; bottom: 6px; right: 4px;
+    width: 5px;
+    border-radius: 3px;
+    background: rgba(143,216,242,0.1);
+    display: none;
+    pointer-events: none;
+  }
+  .scroll-track.visible{ display: block; }
+  .scroll-thumb{
+    position: absolute;
+    left: 0; width: 100%;
+    border-radius: 3px;
+    background: var(--shell-blue-2);
+  }
+  .messages::-webkit-scrollbar-thumb:hover{ background: var(--shell-blue-1); }
 
   .empty-state{
     margin: auto;
@@ -379,6 +405,9 @@
     font-size: 0.85rem;
     font-family: 'Nunito', monospace;
   }
+  .secret-row{ display: flex; gap: 6px; }
+  .secret-row input{ flex: 1; }
+  .btn-reveal{ flex-shrink: 0; padding: 9px 11px !important; font-size: 0.9rem !important; }
   .settings .row-btns{ display: flex; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
   .settings button{
     border: none;
@@ -395,8 +424,21 @@
   .settings small{ color: var(--text-lo); font-size: 0.72rem; line-height: 1.5; }
 
   @media (max-width: 700px){
-    .console{ grid-template-columns: minmax(0,1fr); }
-    .rail{ display: none; }
+    .console{
+      grid-template-columns: minmax(0,1fr);
+      grid-template-rows: auto minmax(0,1fr) auto;
+      height: min(680px, calc(100vh - 16px));
+    }
+    .rail{
+      flex-direction: row;
+      align-items: center;
+      gap: 16px;
+      padding: 8px 14px;
+    }
+    .rail.left, .rail.right{ justify-content: center; }
+    .rail-cap{ display: none; }
+    .rail-dpad{ margin-top: 0; }
+    .rail-buttons{ margin-top: 0; }
     body{ padding: 8px; }
   }
 </style>
@@ -422,11 +464,14 @@
         <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Open settings">&#9881;</button>
       </div>
 
-      <div class="messages" id="messages">
-        <div class="empty-state" id="emptyState">
-          <strong>Say hi to start.</strong><br>
-          Type normally for both Claude and GPT, or start with <strong>@claude</strong> / <strong>@gpt</strong> to pick one. They both remember what Cosmo knows about you.
+      <div class="messages-wrap">
+        <div class="messages" id="messages">
+          <div class="empty-state" id="emptyState">
+            <strong>Say hi to start.</strong><br>
+            Type normally for both Claude and GPT, or start with <strong>@claude</strong> / <strong>@gpt</strong> to pick one. They both remember what Cosmo knows about you.
+          </div>
         </div>
+        <div class="scroll-track" id="scrollTrack"><div class="scroll-thumb" id="scrollThumb"></div></div>
       </div>
 
       <div class="hint-row">
@@ -457,9 +502,20 @@
     <h2>Console settings</h2>
     <label>
       n8n chat webhook URL
-      <input type="text" id="webhookInput" placeholder="https://your-instance.app.n8n.cloud/webhook/.../chat">
+      <div class="secret-row">
+        <input type="password" id="webhookInput" placeholder="https://your-instance.app.n8n.cloud/webhook/.../chat">
+        <button type="button" class="btn-ghost btn-reveal" data-reveal-for="webhookInput" aria-label="Show webhook URL">&#128065;</button>
+      </div>
     </label>
     <small>This is the production webhook URL for the JazzChat Chat Trigger node in n8n. Find it by opening that node and copying the "Production URL".</small>
+    <label>
+      Access key
+      <div class="secret-row">
+        <input type="password" id="accessKeyInput" placeholder="Shared key from the n8n workflow">
+        <button type="button" class="btn-ghost btn-reveal" data-reveal-for="accessKeyInput" aria-label="Show access key">&#128065;</button>
+      </div>
+    </label>
+    <small>Required so random visitors can't run up your Claude/GPT bill. Ask Jasmine for the current key.</small>
     <div class="row-btns">
       <button class="btn-primary" id="saveSettingsBtn">Save</button>
       <button class="btn-ghost" id="closeSettingsBtn">Close</button>
@@ -476,6 +532,7 @@
 (function(){
   var STORAGE_KEYS = {
     webhook: 'jazzchat_webhook_url',
+    accessKey: 'jazzchat_access_key',
     session: 'jazzchat_session_id',
     cache: 'jazzchat_message_cache_'
   };
@@ -495,6 +552,7 @@
   if(!sessionId){ sessionId = uuid(); safeSet(STORAGE_KEYS.session, sessionId); }
 
   var webhookUrl = safeGet(STORAGE_KEYS.webhook) || DEFAULT_WEBHOOK;
+  var accessKey = safeGet(STORAGE_KEYS.accessKey) || '';
 
   var messagesEl = document.getElementById('messages');
   var emptyState = document.getElementById('emptyState');
@@ -507,6 +565,7 @@
   var settingsBtn = document.getElementById('settingsBtn');
   var settingsOverlay = document.getElementById('settingsOverlay');
   var webhookInput = document.getElementById('webhookInput');
+  var accessKeyInput = document.getElementById('accessKeyInput');
   var saveSettingsBtn = document.getElementById('saveSettingsBtn');
   var closeSettingsBtn = document.getElementById('closeSettingsBtn');
   var sessionIdDisplay = document.getElementById('sessionIdDisplay');
@@ -520,10 +579,13 @@
   var modeBtnGpt = document.getElementById('modeBtnGpt');
   var modeBtnBoth = document.getElementById('modeBtnBoth');
   var modeBtnNewSession = document.getElementById('modeBtnNewSession');
+  var scrollTrack = document.getElementById('scrollTrack');
+  var scrollThumb = document.getElementById('scrollThumb');
 
   sessionTag.textContent = 'SESSION ' + sessionId.slice(0, 4).toUpperCase();
   sessionIdDisplay.textContent = sessionId;
   webhookInput.value = webhookUrl;
+  accessKeyInput.value = accessKey;
 
   function cacheKey(){ return STORAGE_KEYS.cache + sessionId; }
 
@@ -543,6 +605,7 @@
     emptyState.style.display = history.length ? 'none' : 'block';
     history.forEach(appendBubble);
     scrollToBottom();
+    updateScrollIndicator();
   }
 
   function speakerClass(speaker){
@@ -592,11 +655,29 @@
     saveCache(history);
     appendBubble(msg);
     scrollToBottom();
+    updateScrollIndicator();
   }
 
   function scrollToBottom(){
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
+
+  function updateScrollIndicator(){
+    var overflow = messagesEl.scrollHeight - messagesEl.clientHeight;
+    if(overflow <= 2){
+      scrollTrack.classList.remove('visible');
+      return;
+    }
+    scrollTrack.classList.add('visible');
+    var trackHeight = scrollTrack.clientHeight;
+    var thumbHeight = Math.max(24, (messagesEl.clientHeight / messagesEl.scrollHeight) * trackHeight);
+    var thumbTop = (messagesEl.scrollTop / overflow) * (trackHeight - thumbHeight);
+    scrollThumb.style.height = thumbHeight + 'px';
+    scrollThumb.style.top = thumbTop + 'px';
+  }
+
+  messagesEl.addEventListener('scroll', updateScrollIndicator);
+  window.addEventListener('resize', updateScrollIndicator);
 
   function setBusy(isBusy){
     ledDot.classList.toggle('busy', isBusy);
@@ -654,6 +735,33 @@
     return parts;
   }
 
+  function showTyping(){
+    hideTyping();
+    var row = document.createElement('div');
+    row.className = 'row claude';
+    row.id = 'typingRow';
+    var avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = '…';
+    var bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    var typing = document.createElement('span');
+    typing.className = 'typing';
+    typing.innerHTML = '<span></span><span></span><span></span>';
+    bubble.appendChild(typing);
+    row.appendChild(avatar);
+    row.appendChild(bubble);
+    messagesEl.appendChild(row);
+    emptyState.style.display = 'none';
+    scrollToBottom();
+    updateScrollIndicator();
+  }
+
+  function hideTyping(){
+    var row = document.getElementById('typingRow');
+    if(row) row.remove();
+  }
+
   function sendMessage(){
     var text = textInput.value.trim();
     if(!text) return;
@@ -668,23 +776,26 @@
     textInput.value = '';
     autoGrow();
     setBusy(true);
+    showTyping();
 
     fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chatInput: text, sessionId: sessionId, action: 'sendMessage' })
+      body: JSON.stringify({ chatInput: text, sessionId: sessionId, action: 'sendMessage', accessKey: accessKey })
     })
     .then(function(res){
       if(!res.ok) throw new Error('Server responded with ' + res.status);
       return res.json();
     })
     .then(function(data){
+      hideTyping();
       var output = data.output || data.text || data.reply || JSON.stringify(data);
       splitReply(output).forEach(function(part){
         pushMessage(part.speaker, part.text);
       });
     })
     .catch(function(err){
+      hideTyping();
       pushMessage('System', 'Could not reach JazzChat: ' + err.message + '. Check the webhook URL in settings, or try again in a bit.');
     })
     .finally(function(){
@@ -708,6 +819,7 @@
 
   settingsBtn.addEventListener('click', function(){
     webhookInput.value = webhookUrl;
+    accessKeyInput.value = accessKey;
     settingsOverlay.classList.add('open');
   });
   closeSettingsBtn.addEventListener('click', function(){
@@ -718,8 +830,18 @@
   });
   saveSettingsBtn.addEventListener('click', function(){
     webhookUrl = webhookInput.value.trim();
+    accessKey = accessKeyInput.value.trim();
     safeSet(STORAGE_KEYS.webhook, webhookUrl);
+    safeSet(STORAGE_KEYS.accessKey, accessKey);
     settingsOverlay.classList.remove('open');
+  });
+  document.querySelectorAll('.btn-reveal').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var target = document.getElementById(btn.getAttribute('data-reveal-for'));
+      var showing = target.type === 'text';
+      target.type = showing ? 'password' : 'text';
+      btn.textContent = showing ? '\u{1F441}' : '\u{1F648}';
+    });
   });
   newSessionBtn.addEventListener('click', startNewSession);
 
