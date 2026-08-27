@@ -1,4 +1,4 @@
-// Minimal smoke test for index-26.html: loads the page in headless Chromium,
+// Minimal smoke test for index.html: loads the page in headless Chromium,
 // fails the build if there are JS errors or the core interactive elements
 // (rails, dpad, mode buttons, settings modal, scroll indicator) are missing.
 import { chromium } from 'playwright';
@@ -14,7 +14,7 @@ function startServer() {
   return new Promise((resolve) => {
     const server = createServer(async (req, res) => {
       try {
-        const file = await readFile(path.join(root, 'index-26.html'));
+        const file = await readFile(path.join(root, 'index.html'));
         res.writeHead(200, { 'Content-Type': 'text/html' });
         res.end(file);
       } catch (e) {
